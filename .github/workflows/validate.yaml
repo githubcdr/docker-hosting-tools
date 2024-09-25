@@ -19,7 +19,7 @@ jobs:
   validate:
     permissions:
       packages: write
-    runs-on: ubuntu-22.04
+    runs-on: arc-runner-org
     steps:
 #      - name: Show GitHub context   
 #        env:
