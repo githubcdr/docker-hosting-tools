@@ -1,10 +1,10 @@
 {
   "extends": [
-    "config:base"
+    "config:recommended"
   ],
   "packageRules": [
     {
-      "updateTypes": [
+      "matchUpdateTypes": [
         "minor",
         "patch"
       ],
@@ -12,14 +12,17 @@
       "platformAutomerge": true,
       "automergeType": "pr",
       "ignoreTests": true,
-      "requiredStatusChecks": null,
       "addLabels": [
         "automerge"
       ]
     },
     {
-      "datasources": ["docker"],
-      "packageNames": ["docker.io/kopia/kopia"],
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "docker.io/kopia/kopia"
+      ],
       "allowedVersions": "/^[0-9]\\.[0-9]+\\.[0-9]+$/"
     }
   ]
