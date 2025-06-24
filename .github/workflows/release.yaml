@@ -117,8 +117,3 @@ jobs:
           # Save the cache for this run, scoped to the workflow name.
           # mode=max includes all intermediate layers for the best caching performance.
           cache-to: type=gha,scope=${{ github.workflow }},mode=max
-
-      - name: Image digest
-        # Only run this step if the image was actually pushed
-        if: steps.docker_build.outputs.digest != ''
-        run: echo "Image digest: ${{ steps.docker_build.outputs.digest }}"
