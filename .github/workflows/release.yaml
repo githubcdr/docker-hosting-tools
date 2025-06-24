@@ -95,7 +95,7 @@ jobs:
 
       - name: Build and push container image
         id: docker_build
-        uses: docker/build-push-action@v6.5.0 # Pinned
+        uses: docker/build-push-action@v6.18.0 # Pinned
         with:
           context: .
           builder: ${{ steps.buildx.outputs.name }}
