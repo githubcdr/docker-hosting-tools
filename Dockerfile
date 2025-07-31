@@ -12,7 +12,7 @@ LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.vendor="githubcdr"
 
 # libwebp-tools imagemagick git xz ca-certificates mariadb-client wget curl openssh-client rsync just
-RUN  apk add --update --no-cache task just libwebp-tools wget curl jq yq xz mariadb openssh-client mc rsync
+RUN  apk add --update --no-cache task just libwebp-tools wget curl jq yq xz mariadb openssh-client mc rsync grype regclient
 
 COPY --from=rclone /usr/local/bin/rclone /usr/local/bin/
 COPY --from=kopia /bin/kopia /usr/local/bin/
