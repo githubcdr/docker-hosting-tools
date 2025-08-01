@@ -33,7 +33,7 @@ jobs:
 
       - name: Docker meta
         id: meta
-        uses: docker/metadata-action@v5.7.0 # Pinned to a specific version for stability
+        uses: docker/metadata-action@v5.8.0 # Pinned to a specific version for stability
         with:
           images: |
             ghcr.io/${{ github.repository_owner }}/hosting-tools
