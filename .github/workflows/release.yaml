@@ -50,10 +50,10 @@ jobs:
             type=semver,pattern=v{{version}}
             type=semver,pattern=v{{major}}.{{minor}}
             type=semver,pattern=v{{major}}
-            # Also generate semver tags without the 'v' prefix
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            # # Also generate semver tags without the 'v' prefix
+            # type=semver,pattern={{version}}
+            # type=semver,pattern={{major}}.{{minor}}
+            # type=semver,pattern={{major}}
             # Tag as 'stable' only on a published release event
             type=raw,value=stable,enable=${{ github.event_name == 'release' }}
           labels: |
