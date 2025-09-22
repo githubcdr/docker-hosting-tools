@@ -119,19 +119,27 @@ jobs:
           # Build summary for better visibility
           outputs: type=image,name=target,annotation-index.org.opencontainers.image.description=Multi-platform build
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1
+      - name: Scan image with Grype
+        id: grype_scan
+        uses: anchore/scan-action@v7
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
         with:
-          image-ref: 'ghcr.io/${{ github.repository_owner }}/hosting-tools:${{ steps.meta.outputs.version }}'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
+          image: ghcr.io/${{ github.repository_owner }}/hosting-tools:${{ steps.meta.outputs.version }}
+          # Auth for GHCR (scan remote image)
+          registry-username: ${{ github.repository_owner }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+          # Output & behavior
+          output-format: sarif           # default is sarif, set explicitly for clarity
+          fail-build: false              # keep current behavior (don’t fail the job)
+          severity-cutoff: medium        # adjust if you want stricter gating
+          only-fixed: false              # set true to report only issues with fixes
+          cache-db: true                 # speed up subsequent runs by caching Grype DB
 
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@192325c86100d080feab897ff886c34abd4c83a3 # v3.30.3
+      - name: Upload Grype (SARIF) results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
         if: always() && (github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true')
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: ${{ steps.grype_scan.outputs.sarif }}
 
       - name: Generate build summary
         if: always()
