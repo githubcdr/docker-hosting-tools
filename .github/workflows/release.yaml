@@ -113,7 +113,7 @@ jobs:
             type=gha,scope=${{ github.workflow }},mode=max
             type=registry,ref=ghcr.io/${{ github.repository_owner }}/hosting-tools:buildcache,mode=max
           # Add build attestations and SBOM
-          attestations: true
+          # attestations: true
           sbom: true
           provenance: true
           # Build summary for better visibility
