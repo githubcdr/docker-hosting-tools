@@ -131,7 +131,7 @@ jobs:
           # Output & behavior
           output-format: sarif           # default is sarif, set explicitly for clarity
           fail-build: false              # keep current behavior (don’t fail the job)
-          severity-cutoff: medium        # adjust if you want stricter gating
+          severity-cutoff: critical      # adjust if you want stricter gating
           only-fixed: false              # set true to report only issues with fixes
           cache-db: true                 # speed up subsequent runs by caching Grype DB
 
