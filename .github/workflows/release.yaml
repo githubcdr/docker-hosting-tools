@@ -29,9 +29,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60 # Prevent runaway jobs
     steps:
-      - name: Debug Token Scopes
-        run: |
-          curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/user | jq .permissions
+      # - name: Debug Token Scopes
+      #   run: |
+      #     curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/user | jq .permissions
       - name: Checkout repository
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         
