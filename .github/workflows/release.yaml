@@ -125,9 +125,6 @@ jobs:
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
         with:
           image: ghcr.io/${{ github.repository_owner }}/hosting-tools:${{ steps.meta.outputs.version }}
-          # Auth for GHCR (scan remote image)
-          registry-username: ${{ github.repository_owner }}
-          registry-password: ${{ secrets.GITHUB_TOKEN }}
           # Output & behavior
           output-format: sarif           # default is sarif, set explicitly for clarity
           fail-build: false              # keep current behavior (don’t fail the job)
