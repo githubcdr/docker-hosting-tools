@@ -98,11 +98,15 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: |
-            type=gha,scope=${{ github.workflow }}
+            # Primary, stable: registry cache
             type=registry,ref=ghcr.io/${{ github.repository_owner }}/hosting-tools:buildcache
+            # Bonus: gha cache (scoped to workflow + ref)
+            type=gha,scope=${{ github.workflow }}-${{ github.ref_name }}
           cache-to: |
-            type=gha,scope=${{ github.workflow }},mode=max
-            type=registry,ref=ghcr.io/${{ github.repository_owner }}/hosting-tools:buildcache,mode=max
+            # Keep registry cache as the reliable target
+            type=registry,ref=ghcr.io/${{ github.repository_owner }}/hosting-tools:buildcache,mode=max,compression=zstd
+            # Make gha cache best-effort and scoped
+            type=gha,mode=max,scope=${{ github.workflow }}-${{ github.ref_name }},ignore-error=true
           sbom: true
           provenance: true
           outputs: type=image,name=target,annotation-index.org.opencontainers.image.description=Multi-platform build
