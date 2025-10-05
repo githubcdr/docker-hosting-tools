@@ -97,12 +97,13 @@ jobs:
           push: ${{ env.DO_PUSH }}                # <— single source of truth
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: |
-            type=registry,ref=ghcr.io/${{ github.repository_owner }}/hosting-tools:buildcache
-            type=gha,scope=${{ github.workflow }}-${{ github.ref_name }}
-          cache-to: |
-            type=registry,ref=ghcr.io/${{ github.repository_owner }}/hosting-tools:buildcache,mode=max,compression=zstd
-            type=gha,mode=max,scope=${{ github.workflow }}-${{ github.ref_name }},ignore-error=true
+          no-cache: true
+          # cache-from: |
+          #   type=registry,ref=ghcr.io/${{ github.repository_owner }}/hosting-tools:buildcache
+          #   type=gha,scope=${{ github.workflow }}-${{ github.ref_name }}
+          # cache-to: |
+          #   type=registry,ref=ghcr.io/${{ github.repository_owner }}/hosting-tools:buildcache,mode=max,compression=zstd
+          #   type=gha,mode=max,scope=${{ github.workflow }}-${{ github.ref_name }},ignore-error=true
           sbom: true
           provenance: true
           outputs: type=image,name=target,annotation-index.org.opencontainers.image.description=Multi-platform build
