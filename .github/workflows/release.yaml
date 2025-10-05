@@ -18,43 +18,34 @@ concurrency:
 
 jobs:
   release:
-    # Add 'actions: write' permission for the GHA cache backend.
-    # 'packages: write' is for pushing to GHCR.
     permissions:
       contents: read
       packages: write
-      actions: write # Required for cache-to=type:gha
-      security-events: write # For vulnerability scanning
-      attestations: write # For build attestations
+      actions: write
+      security-events: write
+      attestations: write
     runs-on: ubuntu-24.04
-    timeout-minutes: 60 # Prevent runaway jobs
+    timeout-minutes: 60
+    env:
+      DO_PUSH: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
+
     steps:
-      # - name: Debug Token Scopes
-      #   run: |
-      #     curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/user | jq .permissions
       - name: Checkout repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-        
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+
       - name: Docker meta
         id: meta
-        uses: docker/metadata-action@c1e51972afc2121e065aed6d45c65596fe445f3f # v5.8.0
+        uses: docker/metadata-action@c1e51972afc2121e065aed6d45c65596fe445f3f
         with:
           images: |
             ghcr.io/${{ github.repository_owner }}/hosting-tools
             docker.io/cdrocker/hosting-tools
             git.codar.nl/codarhq/hosting-tools
           tags: |
-            # Generate tags for branch events (e.g., main, develop)
             type=ref,event=branch
-            # Generate semver tags from Git tags (e.g., v1.2.3, v1.2, v1)
             type=semver,pattern=v{{version}}
             type=semver,pattern=v{{major}}.{{minor}}
             type=semver,pattern=v{{major}}
-            # # Also generate semver tags without the 'v' prefix
-            # type=semver,pattern={{version}}
-            # type=semver,pattern={{major}}.{{minor}}
-            # type=semver,pattern={{major}}
-            # Tag as 'stable' only on a published release event
             type=raw,value=stable,enable=${{ github.event_name == 'release' }}
           labels: |
             maintainer=${{ github.actor }}
@@ -66,75 +57,83 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.licenses=MIT
 
-      - name: Set up QEMU for multi-platform builds
-        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392
 
       - name: Set up Docker Buildx
         id: buildx
-        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435
 
-      - name: Login to GHCR Container Registry
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+      - name: Login to GHCR
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef
         with:
           registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }} # Use built-in token instead of custom secret
+          username: ${{ github.actor }}          # <— use actor for GHCR
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Docker Hub Container Registry
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+      - name: Login to Docker Hub
+        if: ${{ env.DO_PUSH == 'true' }}
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Login to Codar Container Registry
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
+      - name: Login to Codar Registry (best-effort)
+        if: ${{ env.DO_PUSH == 'true' }}
+        continue-on-error: true                   # <— don’t sink the build
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef
         with:
           username: ${{ secrets.CODARREPO_USERNAME }}
           password: ${{ secrets.CODARREPO_TOKEN }}
           registry: ${{ secrets.CODARREPO_URL }}
 
-      - name: Build and push container image
+      - name: Build (and maybe push)
         id: docker_build
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83
         with:
           context: .
           builder: ${{ steps.buildx.outputs.name }}
           platforms: linux/amd64,linux/arm64
-          # Improved push condition for better clarity
-          push: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
+          push: ${{ env.DO_PUSH }}                # <— single source of truth
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Enhanced caching with registry-based cache
           cache-from: |
             type=gha,scope=${{ github.workflow }}
-            type=gha,scope=${{ github.workflow }},ref=refs/heads/main
             type=registry,ref=ghcr.io/${{ github.repository_owner }}/hosting-tools:buildcache
           cache-to: |
             type=gha,scope=${{ github.workflow }},mode=max
             type=registry,ref=ghcr.io/${{ github.repository_owner }}/hosting-tools:buildcache,mode=max
-          # Add build attestations and SBOM
-          # attestations: true
           sbom: true
           provenance: true
-          # Build summary for better visibility
           outputs: type=image,name=target,annotation-index.org.opencontainers.image.description=Multi-platform build
+
+      - name: Resolve tag-to-scan
+        id: pick_tag
+        run: |
+          if [ -n "${{ steps.meta.outputs.version }}" ]; then
+            echo "tag=ghcr.io/${{ github.repository_owner }}/hosting-tools:${{ steps.meta.outputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            # fall back to first computed tag
+            first="$(echo "${{ steps.meta.outputs.tags }}" | head -n1)"
+            echo "tag=${first}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Using tag: $(cat $GITHUB_OUTPUT)"
 
       - name: Scan image with Grype
         id: grype_scan
         uses: anchore/scan-action@v7
-        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
+        if: ${{ env.DO_PUSH == 'true' }}
         with:
-          image: ghcr.io/${{ github.repository_owner }}/hosting-tools:${{ steps.meta.outputs.version }}
-          # Output & behavior
-          output-format: sarif           # default is sarif, set explicitly for clarity
-          fail-build: false              # keep current behavior (don’t fail the job)
-          severity-cutoff: critical      # adjust if you want stricter gating
-          only-fixed: false              # set true to report only issues with fixes
-          cache-db: true                 # speed up subsequent runs by caching Grype DB
+          image: ${{ steps.pick_tag.outputs.tag }}
+          output-format: sarif
+          fail-build: false
+          severity-cutoff: critical
+          only-fixed: false
+          cache-db: true
 
-      - name: Upload Grype (SARIF) results to GitHub Security
+      - name: Upload Grype (SARIF) results
         uses: github/codeql-action/upload-sarif@v3
-        if: always() && (github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true')
+        if: always() && env.DO_PUSH == 'true'
         with:
           sarif_file: ${{ steps.grype_scan.outputs.sarif }}
 
@@ -147,7 +146,7 @@ jobs:
           echo "- **SHA**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Platforms**: linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
           echo "- **Tags**: ${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Push**: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Push**: ${{ env.DO_PUSH }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Cleanup on failure
         if: failure()
