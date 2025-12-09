@@ -1,7 +1,8 @@
 name: release
 on:
   release:
-    types: [published]
+    types:
+      - published
   workflow_dispatch:
     inputs:
       dry_run:
@@ -24,18 +25,18 @@ jobs:
       actions: write
       security-events: write
       attestations: write
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
       DO_PUSH: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+        uses: actions/checkout@v4
 
       - name: Docker meta
         id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051
+        uses: docker/metadata-action@v5
         with:
           images: |
             ghcr.io/${{ github.repository_owner }}/hosting-tools
@@ -58,96 +59,95 @@ jobs:
             org.opencontainers.image.licenses=MIT
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         id: buildx
-        uses: docker/setup-buildx-action@65d18f8f8a05aab1b2d761032bec9cd5578caadb
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to GHCR
-        uses: docker/login-action@28fdb31ff34708d19615a74d67103ddc2ea9725c
+        if: ${{ env.DO_PUSH == 'true' }}
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}          # <— use actor for GHCR
+          username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to Docker Hub
         if: ${{ env.DO_PUSH == 'true' }}
-        uses: docker/login-action@28fdb31ff34708d19615a74d67103ddc2ea9725c
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Login to Codar Registry (best-effort)
         if: ${{ env.DO_PUSH == 'true' }}
-        continue-on-error: true                   # <— don’t sink the build
-        uses: docker/login-action@28fdb31ff34708d19615a74d67103ddc2ea9725c
+        uses: docker/login-action@v3
         with:
+          registry: ${{ secrets.CODARREPO_URL }}
           username: ${{ secrets.CODARREPO_USERNAME }}
           password: ${{ secrets.CODARREPO_TOKEN }}
-          registry: ${{ secrets.CODARREPO_URL }}
 
-      - name: Build (and maybe push)
+      - name: Build and push Docker image
         id: docker_build
-        uses: docker/build-push-action@9e436ba9f2d7bcd1d038c8e55d039d37896ddc5d
+        uses: docker/build-push-action@v6
         with:
           context: .
           builder: ${{ steps.buildx.outputs.name }}
           platforms: linux/amd64,linux/arm64
-          push: ${{ env.DO_PUSH }}                # <— single source of truth
+          push: ${{ env.DO_PUSH }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          no-cache: true
-          # cache-from: |
-          #   type=registry,ref=ghcr.io/${{ github.repository_owner }}/hosting-tools:buildcache
-          #   type=gha,scope=${{ github.workflow }}-${{ github.ref_name }}
-          # cache-to: |
-          #   type=registry,ref=ghcr.io/${{ github.repository_owner }}/hosting-tools:buildcache,mode=max,compression=zstd
-          #   type=gha,mode=max,scope=${{ github.workflow }}-${{ github.ref_name }},ignore-error=true
+          cache-from: type=gha,scope=${{ github.workflow }}
+          cache-to: type=gha,mode=max,scope=${{ github.workflow }}
           sbom: true
-          provenance: true
-          outputs: type=image,name=target,annotation-index.org.opencontainers.image.description=Multi-platform build
+          provenance: mode=max
+          outputs: type=image,name=target,annotation-index.org.opencontainers.image.description=Multi-platform hosting tools collection
 
-      - name: Resolve tag-to-scan
+      - name: Resolve tag to scan
         id: pick_tag
         run: |
-          if [ -n "${{ steps.meta.outputs.version }}" ]; then
-            echo "tag=ghcr.io/${{ github.repository_owner }}/hosting-tools:${{ steps.meta.outputs.version }}" >> "$GITHUB_OUTPUT"
-          else
-            # fall back to first computed tag
-            first="$(echo "${{ steps.meta.outputs.tags }}" | head -n1)"
-            echo "tag=${first}" >> "$GITHUB_OUTPUT"
-          fi
-          echo "Using tag: $(cat $GITHUB_OUTPUT)"
+          # Use the first tag from metadata-action output
+          SCAN_TAG="$(echo '${{ steps.meta.outputs.tags }}' | head -n1)"
+          echo "tag=${SCAN_TAG}" >> "$GITHUB_OUTPUT"
+          echo "### Image to scan" >> $GITHUB_STEP_SUMMARY
+          echo "\`${SCAN_TAG}\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Scan image with Grype
         id: grype_scan
-        uses: anchore/scan-action@v7
-        if: ${{ env.DO_PUSH == 'true' }}
+        uses: anchore/scan-action@v5
         with:
           image: ${{ steps.pick_tag.outputs.tag }}
           output-format: sarif
           fail-build: false
           severity-cutoff: critical
           only-fixed: false
-          cache-db: true
 
-      - name: Upload Grype (SARIF) results
-        uses: github/codeql-action/upload-sarif@v4
-        if: always() && env.DO_PUSH == 'true'
+      - name: Upload Grype SARIF results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: steps.grype_scan.outcome != 'skipped'
         with:
           sarif_file: ${{ steps.grype_scan.outputs.sarif }}
+          category: grype-scan
 
       - name: Generate build summary
         if: always()
         run: |
-          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- **Event**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Ref**: ${{ github.ref }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **SHA**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Platforms**: linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
-          echo "- **Tags**: ${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Push**: ${{ env.DO_PUSH }}" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "| --- | --- |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Event** | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Ref** | \`${{ github.ref }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **SHA** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Platforms** | linux/amd64, linux/arm64 |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Pushed** | ${{ env.DO_PUSH }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Image Digest** | \`${{ steps.docker_build.outputs.digest }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🏷️ Tags" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Cleanup on failure
         if: failure()
