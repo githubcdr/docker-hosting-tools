@@ -39,7 +39,7 @@ RUN echo "=== Verifying installed binaries ===" && \
     # Compression tools
     xz --version && echo "✓ xz" && \
     # Database tools
-    mariadb --version && echo "✓ mariadb" && \
+    mysql --version && echo "✓ mariadb" && \
     # Transfer tools
     rsync --version | head -n1 && echo "✓ rsync" && \
     ssh -V 2>&1 | head -n1 && echo "✓ ssh (openssh-client)" && \
