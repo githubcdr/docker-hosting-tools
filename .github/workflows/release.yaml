@@ -3,6 +3,9 @@ on:
   release:
     types:
       - published
+  schedule:
+    # Run weekly on Mondays at 03:00 UTC to rebuild latest stable release
+    - cron: '0 3 * * 1'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -34,6 +37,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Fetch and checkout latest release tag
+        if: github.event_name == 'schedule'
+        run: |
+          # Fetch all tags
+          git fetch --tags
+          # Get the latest release tag (assuming semver format)
+          LATEST_TAG=$(git tag -l --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
+          if [ -z "$LATEST_TAG" ]; then
+            echo "Error: No release tags found"
+            exit 1
+          fi
+          echo "Latest release tag: $LATEST_TAG"
+          git checkout "$LATEST_TAG"
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
@@ -47,7 +64,7 @@ jobs:
             type=semver,pattern=v{{version}}
             type=semver,pattern=v{{major}}.{{minor}}
             type=semver,pattern=v{{major}}
-            type=raw,value=stable,enable=${{ github.event_name == 'release' }}
+            type=raw,value=stable,enable=${{ github.event_name == 'release' || github.event_name == 'schedule' }}
           labels: |
             maintainer=${{ github.actor }}
             org.opencontainers.image.title=hosting-tools
