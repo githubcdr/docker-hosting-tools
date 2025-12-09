@@ -1,0 +1,135 @@
+---
+# $schema: https://json.schemastore.org/taskfile
+# Version: 2024.11.06
+
+version: "3"
+
+tasks:
+  default:
+    silent: true
+    cmds:
+      - "{{ .TASK_EXE }} -l"
+
+  setup:
+    desc: Check if all Taskfile dependencies are installed
+    vars:
+      DEPENDENCIES:
+        - yamllint
+        - kustomize
+        - helm
+        - dotenv-linter
+        - prettier
+        - terraform
+        - rg
+        - jq
+        - uv
+    cmds:
+      - for: { var: DEPENDENCIES }
+        cmd: 'which {{ .ITEM }} > /dev/null || { echo "👻 Missing dependency: {{ .ITEM }}, please install manually."; false; }'
+      - cmd: echo "🍓 Taskfile dependencies installed"
+    silent: true
+
+  validate:
+    desc: Validate all changed files, this task does not change files
+    cmds:
+      # it makes sense to run the linters in order of importance
+      - task: validate:whitespace
+      - task: validate:yaml
+      - task: validate:json
+      - task: validate:dotenv
+      - task: validate:terraform
+      - task: validate:format
+    preconditions:
+      - sh: test -z "$SKIP_CI"
+        msg: "👻 Skipping CI checks, SKIP_CI env is set"
+    deps:
+      - task: setup
+
+  format:
+    desc: Format files, this task can change files
+    cmds:
+      - task: format:whitespace
+      - task: format:prettier
+      - task: format:terraform
+    preconditions:
+      - sh: test -z "$SKIP_CI"
+        msg: "👻 Skipping CI checks, SKIP_CI env is set"
+    deps:
+      - task: setup
+
+  validate:whitespace:
+    desc: Validate whitespace
+    cmds:
+      - echo "🍋 Checking for trailing whitespace"
+      - rg '[[:space:]]$' --line-number || true
+    silent: true
+
+  validate:dotenv:
+    desc: Run dotenv-linter
+    cmds:
+      - echo "🥥 Checking .env files"
+      - dotenv-linter check --recursive --quiet --skip-updates --ignore-checks UnorderedKey --ignore-checks ValueWithoutQuotes --exclude ./hacks .
+    silent: true
+
+  validate:json:
+    desc: Run jsonlint
+    cmds:
+      - echo "🍎 Checking json files"
+      - cmd: |
+          find . -type f -name "*.json" | grep -vFf <(git ls-files --others --ignored --exclude-standard) | while read -r file; do
+            jq empty "$file" || { echo "Linting issue found in: $file"; true; }
+          done
+    silent: true
+
+  validate:python:
+    desc: Run ruff Python linter
+    cmds:
+      - echo "🍏 Checking python files"
+      - uvx ruff check
+    silent: true
+
+  validate:yaml:
+    desc: Run yamllint
+    cmds:
+      - echo "🍏 Checking yaml files"
+      - yamllint -c .config/yamllint.yaml .
+    silent: true
+
+  validate:terraform:
+    desc: Run terraform check
+    cmds:
+      - echo "🥝 Checking terraform files"
+      - terraform fmt --recursive --check .
+    silent: true
+
+  validate:format:
+    desc: Run prettier check
+    cmds:
+      - echo "🍇 Checking formating issues"
+      - prettier --no-config --log-level warn --check . || true
+    silent: true
+
+  format:whitespace:
+    desc: Fix trailing whitespaces
+    cmds:
+      - echo "🍌 Fixing trailing whitespaces"
+      - if [[ "$OSTYPE" == "darwin"* ]]; then
+        rg -l '[[:space:]]$' --line-number | xargs sed -i '' 's/[[:space:]]*$//';
+        else
+        rg -l '[[:space:]]$' --line-number | xargs -r sed -i 's/[[:space:]]*$//';
+        fi
+    silent: true
+
+  format:terraform:
+    desc: Format terraform files
+    cmds:
+      - echo "🍊 Formatting terraform files"
+      - terraform fmt --recursive .
+    silent: true
+
+  format:prettier:
+    desc: Format javascript, typescript, json, yaml, markdown, and css files
+    cmds:
+      - echo "🍉 Formatting files with prettier"
+      - prettier --no-config -l --write .
+    silent: true

@@ -1,0 +1,14 @@
+pre-commit:
+  piped: true # Stop if one of the steps fail
+  commands:
+    prettier-code:
+      glob: "*.{yml,yaml,js,json,md,json5}"
+      run: prettier --no-config --write {staged_files}
+    format-terraform:
+      glob: "*.tf"
+      run: terraform fmt {staged_files}
+    format-python:
+      glob: "*.py"
+      run: uvx ruff format {staged_files}
+    validate:
+      run: task validate

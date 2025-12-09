@@ -1,0 +1,40 @@
+---
+# see https://yamllint.readthedocs.io/en/stable/index.html for more options
+yaml-files:
+  - "*.yaml"
+  - "*.yml"
+  - ".*.yml"
+  - ".*.yaml"
+# ignore helm templates and gotk-components.yaml
+ignore: |
+  gotk-components.yaml
+  **/templates/*
+  hacks/*
+extends: default
+rules:
+  truthy:
+    allowed-values: ["true", "false"]
+  line-length:
+    max: 320
+    level: warning
+    allow-non-breakable-inline-mappings: true
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
+  brackets:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
+    check-multi-line-strings: false
+  document-start: disable
+  comments: disable
+  comments-indentation: disable
+  empty-lines:
+    max: 2
+    max-start: 0
+    max-end: 1
+  commas:
+    level: warning
+  new-lines: disable

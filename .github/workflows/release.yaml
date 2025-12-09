@@ -1,15 +1,15 @@
 name: release
-on:
+on: # yamllint disable-line rule:truthy
   release:
     types:
       - published
   schedule:
     # Run weekly on Mondays at 03:00 UTC to rebuild latest stable release
-    - cron: '0 3 * * 1'
+    - cron: "0 3 * * 1"
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Run build without pushing to registries'
+        description: "Run build without pushing to registries"
         required: false
         type: boolean
         default: false
