@@ -115,7 +115,7 @@ jobs:
 
       - name: Scan image with Grype
         id: grype_scan
-        uses: anchore/scan-action@v5
+        uses: anchore/scan-action@v7
         with:
           image: ${{ steps.pick_tag.outputs.tag }}
           output-format: sarif
