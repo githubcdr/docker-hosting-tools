@@ -12,7 +12,7 @@ LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.vendor="githubcdr"
 
 # libwebp-tools imagemagick git xz ca-certificates mariadb-client wget curl openssh-client rsync just
-RUN  apk add --update --no-cache task just libwebp-tools wget curl jq yq xz mariadb openssh-client mc rsync grype regclient croc
+RUN  apk add --update --no-cache task just libwebp-tools wget curl jq yq xz mariadb-client openssh-client mc rsync grype regclient croc
 
 COPY --from=rclone /usr/local/bin/rclone /usr/local/bin/
 COPY --from=kopia /bin/kopia /usr/local/bin/
@@ -39,7 +39,7 @@ RUN echo "=== Verifying installed binaries ===" && \
     # Compression tools
     xz --version && echo "✓ xz" && \
     # Database tools
-    mysql --version && echo "✓ mariadb" && \
+    mariadb --version && echo "✓ mariadb" && \
     # Transfer tools
     rsync --version | head -n1 && echo "✓ rsync" && \
     ssh -V 2>&1 | head -n1 && echo "✓ ssh (openssh-client)" && \
