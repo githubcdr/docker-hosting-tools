@@ -1,7 +1,7 @@
 FROM docker.io/rclone/rclone:1.72.0 AS rclone
 FROM docker.io/kopia/kopia:0.22.3 AS kopia
 FROM docker.io/restic/restic:0.18.1 AS restic
-FROM ghcr.io/rustic-rs/rustic:v0.10.1 AS rustic
+FROM ghcr.io/rustic-rs/rustic:v0.10.3 AS rustic
 FROM cgr.dev/chainguard/wolfi-base
 
 LABEL org.opencontainers.image.title="Hosting tools"
