@@ -144,7 +144,7 @@ jobs:
 
       - name: Scan image with Grype
         id: grype_scan
-        uses: anchore/scan-action@v3
+        uses: anchore/scan-action@v7
         with:
           image: ${{ fromJson(steps.meta.outputs.json).tags[0] }}
           fail-build: false
