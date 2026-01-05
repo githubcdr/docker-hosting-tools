@@ -61,9 +61,9 @@ jobs:
             git.codar.nl/codarhq/hosting-tools
           tags: |
             type=ref,event=branch
-            type=semver,pattern=v{{version}}
-            type=semver,pattern=v{{major}}.{{minor}}
-            type=semver,pattern=v{{major}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
             type=raw,value=latest,enable=${{ github.event_name == 'release' || github.event_name == 'schedule' }}
             type=raw,value=stable,enable=${{ github.event_name == 'release' || github.event_name == 'schedule' }}
           labels: |
@@ -72,9 +72,6 @@ jobs:
             org.opencontainers.image.description=A collection of self-hosting and operational tools
             org.opencontainers.image.url=https://codar.nl
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.licenses=MIT
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -160,14 +157,14 @@ jobs:
       - name: Generate build summary
         if: always()
         run: |
-          echo "## 🚀 Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "| --- | --- |" >> $GITHUB_STEP_SUMMARY
           echo "| **Event** | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Pushed** | ${{ env.DO_PUSH }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Digest** | \`${{ steps.docker_build.outputs.digest }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🏷️ Tags" >> $GITHUB_STEP_SUMMARY
+          echo "### Tags" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
