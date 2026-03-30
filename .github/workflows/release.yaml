@@ -2,7 +2,8 @@ name: release
 
 on: # yamllint disable-line rule:truthy
   release:
-    types: [published]
+    types:
+      - published
   schedule:
     # Run weekly on Mondays at 03:00 UTC to rebuild latest stable release
     - cron: "0 3 * * 1"
