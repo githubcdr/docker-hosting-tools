@@ -44,7 +44,7 @@ RUN echo "=== Verifying installed binaries ===" && \
     rsync --version | head -n1 && echo "✓ rsync" && \
     ssh -V 2>&1 | head -n1 && echo "✓ ssh (openssh-client)" && \
     # File manager
-    mc --version && echo "✓ mc" && \
+    # todo: nneds TERM var; mc --version && echo "✓ mc" && \
     # Security/Registry tools
     grype version && echo "✓ grype" && \
     regctl version && echo "✓ regctl (regclient)" && \
