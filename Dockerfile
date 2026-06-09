@@ -1,6 +1,6 @@
 FROM docker.io/rclone/rclone:1.74.3 AS rclone
 FROM docker.io/kopia/kopia:0.23.0 AS kopia
-FROM docker.io/restic/restic:0.18.1 AS restic
+FROM docker.io/restic/restic:0.19.0 AS restic
 FROM ghcr.io/rustic-rs/rustic:v0.11.3 AS rustic
 FROM cgr.dev/chainguard/wolfi-base
 
