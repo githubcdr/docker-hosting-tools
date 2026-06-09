@@ -5,7 +5,7 @@ on: # yamllint disable-line rule:truthy
     types:
       - published
   schedule:
-    # Run weekly on Mondays at 03:00 UTC to rebuild latest stable release
+    # Rebuild latest stable release weekly on Mondays at 03:00 UTC
     - cron: "0 3 * * 1"
   workflow_dispatch:
     inputs:
@@ -15,7 +15,7 @@ on: # yamllint disable-line rule:truthy
         type: boolean
         default: false
 
-# Ensures that only one workflow run is triggered for the same event and ref.
+# Only one run per ref at a time; cancel any in-progress run for the same ref.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -27,43 +27,44 @@ jobs:
       packages: write
       actions: write
       security-events: write
-      id-token: write      # Required for Cosign Keyless signing
-      attestations: write  # For GitHub Build Provenance
+      id-token: write      # Required for Cosign keyless signing
+      attestations: write  # Required for GitHub build provenance
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
+      # False only when the workflow_dispatch dry_run input is explicitly 'true'.
+      # On release and schedule events this is always 'true' (push enabled).
       DO_PUSH: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true' }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Fetch and checkout latest release tag
+      - name: Resolve latest release tag (scheduled runs only)
         id: get_tag
         if: github.event_name == 'schedule'
         run: |
-          git fetch --tags
+          git fetch --tags --force
           LATEST_TAG=$(git tag -l --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
           if [ -z "$LATEST_TAG" ]; then
-            echo "Error: No release tags found"
-            exit 1
+            echo "No release tags found — nothing to rebuild."
+            exit 0
           fi
-          echo "Latest release tag: $LATEST_TAG"
+          echo "Rebuilding release tag: $LATEST_TAG"
           git checkout "$LATEST_TAG"
-          # Sla de tag op voor gebruik in de volgende stappen
-          echo "tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          echo "tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Docker meta
+      - name: Docker metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@v5
         with:
           images: |
             ghcr.io/${{ github.repository_owner }}/hosting-tools
             docker.io/cdrocker/hosting-tools
           tags: |
-            # 'pattern={{version}}' verwijdert automatisch de 'v' prefix
+            # 'pattern={{version}}' strips the leading 'v' automatically.
             type=semver,pattern={{version}},value=${{ steps.get_tag.outputs.tag || github.ref_name }}
             type=semver,pattern={{major}}.{{minor}},value=${{ steps.get_tag.outputs.tag || github.ref_name }}
             type=semver,pattern={{major}},value=${{ steps.get_tag.outputs.tag || github.ref_name }}
@@ -75,42 +76,34 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         id: buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@v3
 
       - name: Install Cosign
         if: env.DO_PUSH == 'true'
-        uses: sigstore/cosign-installer@v4.1.2
+        uses: sigstore/cosign-installer@v3
 
-      - name: Login to GHCR
+      - name: Log in to GHCR
         if: env.DO_PUSH == 'true'
-        uses: docker/login-action@v4
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Docker Hub
+      - name: Log in to Docker Hub
         if: env.DO_PUSH == 'true'
-        uses: docker/login-action@v4
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # - name: Login to Codar Registry
-      #   if: env.DO_PUSH == 'true'
-      #   uses: docker/login-action@v3
-      #   with:
-      #     registry: ${{ secrets.CODARREPO_URL }}
-      #     username: ${{ secrets.CODARREPO_USERNAME }}
-      #     password: ${{ secrets.CODARREPO_TOKEN }}
-
       - name: Build and push Docker image
         id: docker_build
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -122,17 +115,20 @@ jobs:
           sbom: true
           provenance: mode=max
 
-      - name: Sign the images with Cosign
+      - name: Sign image digest with Cosign
+        # Sign the digest rather than each individual tag — tags are mutable,
+        # the digest is the canonical, immutable reference.
         if: env.DO_PUSH == 'true'
         env:
-          TAGS: ${{ steps.meta.outputs.tags }}
           DIGEST: ${{ steps.docker_build.outputs.digest }}
         run: |
-          echo "${TAGS}" | xargs -I {} cosign sign --yes "{}@${DIGEST}"
+          cosign sign --yes \
+            "ghcr.io/${{ github.repository_owner }}/hosting-tools@${DIGEST}" \
+            "docker.io/cdrocker/hosting-tools@${DIGEST}"
 
-      - name: Generate Artifact Attestations
+      - name: Generate artifact attestation
         if: env.DO_PUSH == 'true'
-        uses: actions/attest-build-provenance@v4
+        uses: actions/attest-build-provenance@v2
         with:
           subject-name: ghcr.io/${{ github.repository_owner }}/hosting-tools
           subject-digest: ${{ steps.docker_build.outputs.digest }}
@@ -140,15 +136,15 @@ jobs:
 
       - name: Scan image with Grype
         id: grype_scan
-        uses: anchore/scan-action@v7
+        uses: anchore/scan-action@v6
         with:
           image: ${{ fromJson(steps.meta.outputs.json).tags[0] }}
           fail-build: false
           severity-cutoff: critical
 
       - name: Upload Grype SARIF results
-        uses: github/codeql-action/upload-sarif@v4
         if: always()
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: ${{ steps.grype_scan.outputs.sarif }}
           category: grype-scan
@@ -156,14 +152,16 @@ jobs:
       - name: Generate build summary
         if: always()
         run: |
-          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "| --- | --- |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Event** | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Pushed** | ${{ env.DO_PUSH }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Digest** | \`${{ steps.docker_build.outputs.digest }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Tags" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Build Summary"
+            echo "| Property | Value |"
+            echo "| --- | --- |"
+            echo "| **Event** | ${{ github.event_name }} |"
+            echo "| **Pushed** | ${{ env.DO_PUSH }} |"
+            echo "| **Digest** | \`${{ steps.docker_build.outputs.digest }}\` |"
+            echo ""
+            echo "### Tags"
+            echo "\`\`\`"
+            echo "${{ steps.meta.outputs.tags }}"
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"
