@@ -128,7 +128,7 @@ jobs:
 
       - name: Generate artifact attestation
         if: env.DO_PUSH == 'true'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ghcr.io/${{ github.repository_owner }}/hosting-tools
           subject-digest: ${{ steps.docker_build.outputs.digest }}
