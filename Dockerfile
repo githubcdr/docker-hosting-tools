@@ -1,4 +1,4 @@
-FROM docker.io/rclone/rclone:1.74.3 AS rclone
+FROM docker.io/rclone/rclone:1.74.4 AS rclone
 FROM docker.io/kopia/kopia:0.23.1 AS kopia
 FROM docker.io/restic/restic:0.19.1 AS restic
 FROM ghcr.io/rustic-rs/rustic:v0.11.3 AS rustic
